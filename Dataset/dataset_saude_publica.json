@@ -1,0 +1,39 @@
+{
+  "training_data": [
+    {
+      "id": 1,
+      "pergunta": "O que é dengue?",
+      "resposta": "Dengue é uma doença infecciosa causada pelo vírus da dengue, transmitido principalmente pelo mosquito Aedes aegypti. É uma das doenças mais importantes de saúde pública nas regiões tropicais e subtropicais.",
+      "categoria": "doenças_infecciosas",
+      "confiança": 0.95
+    },
+    {
+      "id": 2,
+      "pergunta": "Quais são os sintomas da dengue?",
+      "resposta": "Os sintomas principais incluem: febre alta (até 40°C), dor de cabeça intensa, dor nos olhos, músculos e articulações, fraqueza e rash cutâneo. Os sintomas geralmente aparecem entre 3-14 dias após a infecção.",
+      "categoria": "sintomas",
+      "confiança": 0.98
+    },
+    {
+      "id": 3,
+      "pergunta": "Como se transmite o vírus Zika?",
+      "resposta": "O vírus Zika é transmitido principalmente pelo mosquito Aedes aegypti infectado, assim como a dengue. Também pode ser transmitido sexualmente e durante a gravidez (de mãe para filho).",
+      "categoria": "transmissão",
+      "confiança": 0.96
+    },
+    {
+      "id": 4,
+      "pergunta": "Qual é a diferença entre COVID-19 e gripe comum?",
+      "resposta": "COVID-19 é causada pelo vírus SARS-CoV-2 e é mais grave que a gripe. Ambas são respiratórias, mas COVID-19 pode levar a complicações mais sérias como pneumonia grave, trombose e síndrome do desconforto respiratório agudo.",
+      "categoria": "diferenciais",
+      "confiança": 0.94
+    },
+    {
+      "id": 5,
+      "pergunta": "Como funciona uma vacina?",
+      "resposta": "Uma vacina funciona estimulando o sistema imunológico a reconhecer e combater patógenos específicos sem causar a doença. Ela contém antígenos que treinam o sistema imune a produzir anticorpos e células de memória.",
+      "categoria": "vacinação",
+      "confiança": 0.97
+    }
+  ]
+}
