@@ -32,27 +32,64 @@ async def lifespan(app: FastAPI):
     # Check if trained model exists
     trained_model_path = "../Models/modelo_saude_publica_final"
     
-    if os.path.exists(trained_model_path):
-        model_name = trained_model_path
-        logger.info(f"🔄 Carregando modelo treinado: {model_name}")
-    else:
-        model_name = "gpt2" # Fallback for demo if no model trained
-        logger.info(f"⚠️ Modelo treinado não encontrado em {trained_model_path}. Usando fallback: {model_name}")
-    
     try:
-        # Carregar modelo base
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        base_model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            device_map="auto" if device == "cuda" else None,
-            torch_dtype=torch.float16 if device == "cuda" else torch.float32
-        )
-        
+        if os.path.exists(trained_model_path):
+            logger.info(f"🔄 Carregando modelo treinado de: {trained_model_path}")
+            # Load base model first (assuming Llama 2)
+            # Note: In a real scenario, we need the base model path. 
+            # For this demo, we'll assume the adapter path contains the config or we use a default base.
+            # But PeftModel needs a base_model.
+            # Let's assume we use 'gpt2' as base if we can't find Llama, or just load the path as a model if it's a full save.
+            # However, fine_tuning.py saves adapters.
+            # We need the base model name.
+            base_model_name = "meta-llama/Llama-2-7b-hf"
+            
+            try:
+                # Configuração de Quantização apenas se tiver GPU
+                quantization_config = None
+                if device == "cuda":
+                    from transformers import BitsAndBytesConfig
+                    quantization_config = BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_quant_type="nf4",
+                        bnb_4bit_compute_dtype=torch.float16,
+                        bnb_4bit_use_double_quant=False,
+                    )
+                
+                tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+                
+                model_kwargs = {
+                    "device_map": "auto" if device == "cuda" else None,
+                    "torch_dtype": torch.float16 if device == "cuda" else torch.float32,
+                    "attn_implementation": "eager", # Force standard attention to avoid FMHA kernel errors
+                }
+                
+                if quantization_config:
+                    model_kwargs["quantization_config"] = quantization_config
+
+                base_model = AutoModelForCausalLM.from_pretrained(
+                    base_model_name,
+                    **model_kwargs
+                )
+                model = PeftModel.from_pretrained(base_model, trained_model_path)
+            except Exception as e:
+                logger.warning(f"⚠️ Could not load Llama 2 ({e}). Falling back to GPT-2 for demo.")
+                base_model_name = "gpt2"
+                tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+                model = AutoModelForCausalLM.from_pretrained(base_model_name)
+                if tokenizer.pad_token is None:
+                    tokenizer.pad_token = tokenizer.eos_token
+
+        else:
+            logger.warning(f"⚠️ Modelo treinado não encontrado em {trained_model_path}. Usando fallback: gpt2")
+            model_name = "gpt2"
+            tokenizer = AutoTokenizer.from_pretrained(model_name)
+            model = AutoModelForCausalLM.from_pretrained(model_name)
+            
         # Ensure pad token
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
             
-        model = base_model
         logger.info("✅ Modelo carregado com sucesso!")
         
     except Exception as e:
@@ -96,9 +133,6 @@ class RespostaResponse(BaseModel):
 async def responder(request: PerguntaRequest):
     """
     Responde pergunta sobre saúde pública.
-    Complexidade: O(n × d²) onde:
-    - n = tokens gerados
-    - d = dimensão do modelo (4096)
     """
     start_time = time.time()
     
@@ -111,24 +145,33 @@ async def responder(request: PerguntaRequest):
         )
     
     try:
-        # Preparar prompt
-        prompt = f"Pergunta: {request.pergunta}\nResposta:"
+        # Preparar prompt com instrução de sistema para Português
+        prompt = f"""<s>[INST] <<SYS>>
+Você é um assistente de saúde útil e preciso. Você deve responder sempre em Português do Brasil.
+<</SYS>>
+
+{request.pergunta} [/INST]"""
         
         # Tokenizar
-        input_ids = tokenizer.encode(
+        inputs = tokenizer(
             prompt,
-            return_tensors="pt"
+            return_tensors="pt",
+            padding=True,
+            truncation=True
         ).to(device)
         
         # Gerar resposta
         with torch.no_grad():
             output_ids = model.generate(
-                input_ids,
-                max_new_tokens=request.max_tokens,
-                temperature=request.temperature,
-                top_p=0.95,
+                inputs.input_ids,
+                attention_mask=inputs.attention_mask,
+                max_new_tokens=128, # Reduzido para evitar divagações longas
+                temperature=0.4,    # Reduzido para ser mais focado
+                top_p=0.9,
                 do_sample=True,
-                pad_token_id=tokenizer.eos_token_id
+                pad_token_id=tokenizer.eos_token_id,
+                repetition_penalty=1.2,
+                no_repeat_ngram_size=3
             )
         
         # Detokenizar
@@ -146,7 +189,7 @@ async def responder(request: PerguntaRequest):
             pergunta=request.pergunta,
             resposta=resposta,
             tempo_processamento=tempo_processamento,
-            modelo="LLaMA 2 7B + LoRA" if "llama" in str(type(model)).lower() else "Demo Model"
+            modelo="LLaMA 2 7B + LoRA" if "llama" in str(type(model)).lower() else "GPT-2 (Demo)"
         )
     
     except Exception as e:

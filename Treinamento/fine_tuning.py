@@ -23,25 +23,53 @@ class LLMTrainerSaudePública:
         print(f"🤖 Modelo: {model_name}")
         
         try:
+            # Configuração de Quantização (4-bit) apenas se tiver GPU
+            quantization_config = None
+            if self.device == "cuda":
+                from transformers import BitsAndBytesConfig
+                quantization_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_quant_type="nf4",
+                    bnb_4bit_compute_dtype=torch.float16,
+                    bnb_4bit_use_double_quant=False,
+                )
+
             # Carregar modelo e tokenizer
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+            
+            model_kwargs = {
+                "device_map": "auto" if self.device == "cuda" else None,
+                "torch_dtype": torch.float16 if self.device == "cuda" else torch.float32,
+                "attn_implementation": "eager", # Force standard attention to avoid FMHA kernel errors
+            }
+            
+            if quantization_config:
+                model_kwargs["quantization_config"] = quantization_config
+            
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name,
-                device_map="auto" if self.device == "cuda" else None,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32
+                **model_kwargs
             )
+            
+            # Preparar modelo para treinamento em k-bit se estiver usando quantização
+            if quantization_config:
+                from peft import prepare_model_for_kbit_training
+                self.model = prepare_model_for_kbit_training(self.model)
+            
         except Exception as e:
             print(f"❌ Erro ao carregar modelo {model_name}: {e}")
-            print("⚠️ Tentando usar 'gpt2' apenas para demonstração do código...")
+            print("⚠️ Mudando para 'gpt2' para teste (sem necessidade de GPU/Token)...")
             self.model_name = "gpt2"
             self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
             self.model = AutoModelForCausalLM.from_pretrained("gpt2")
+            # GPT2 não tem pad token por padrão
+            self.tokenizer.pad_token = self.tokenizer.eos_token
         
-        # Adicionar padding token se não existir
+        # Garantir pad token
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
             
-        # Fix for gpt2 which doesn't have some attributes expected by Llama
+        # Fix for gpt2
         if self.model.config.pad_token_id is None:
             self.model.config.pad_token_id = self.tokenizer.pad_token_id
     
