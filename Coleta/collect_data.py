@@ -52,6 +52,21 @@ def criar_dataset_exemplo():
     
     return dataset
 
+def criar_dataset_real():
+    df = pd.read_csv("../Dataset/medquad.csv")
+    
+    lista_treinamento = []
+    for index, row in df.iterrows():
+        exemplo = {
+            "id": index,
+            "pergunta": row['question'],
+            "resposta": row['answer'],
+            "categoria": "focus_area"
+        }
+        lista_treinamento.append(exemplo)
+        
+    return { "training_data": lista_treinamento }
+
 def salvar_dataset(dataset, caminho="../Dataset/dataset_saude_publica.json"):
     """
     Complexidade: O(n) onde n = número de exemplos
@@ -94,7 +109,10 @@ def analisar_dataset(dataset):
 
 if __name__ == "__main__":
     # Criar dataset de exemplo
-    dataset = criar_dataset_exemplo()
+    #dataset = criar_dataset_exemplo()
+
+    # Criar dataset real
+    dataset = criar_dataset_real()
     
     # Salvar
     salvar_dataset(dataset)
