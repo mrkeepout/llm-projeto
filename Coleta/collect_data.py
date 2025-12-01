@@ -61,7 +61,7 @@ def criar_dataset_real():
             "id": index,
             "pergunta": row['question'],
             "resposta": row['answer'],
-            "categoria": "focus_area"
+            "categoria": row["focus_area"]
         }
         lista_treinamento.append(exemplo)
         
