@@ -54,3 +54,11 @@ I have successfully implemented the core components of the LLM Health Chatbot pr
 - `pip install`: ✅ Success
 
 The project is now ready for further development and testing!
+
+## Recent Updates (Bug Fixes)
+- **Fixed Model Truncation**: Updated `Backend/main.py` to increase `max_new_tokens` to 512 and set `max_length` to 2048 to prevent warning and ensure complete answers.
+- **Fixed Prompt Echo**: Adjusted decoding logic to correctly remove the prompt from the generated response.
+- **Added Conversation History**: Implemented session-based memory in Backend and Frontend. The chatbot now remembers previous questions within the same session.
+- **Improved Prompt**: Refined the system prompt to reduce hallucinations and better use context.
+- **Smart Response Extraction**: Updated logic to handle cases where the model repeats the user's question or uses non-standard role markers (like "Assistir:"), ensuring the actual answer is extracted before truncation.
+- **Debug Logging**: Added detailed logging to `Backend/main.py` to inspect raw model outputs and diagnose empty response issues.

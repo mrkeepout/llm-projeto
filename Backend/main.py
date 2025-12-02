@@ -117,9 +117,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Armazenamento de conversas em memória (Simples)
+conversations = {}
+
 # Models Pydantic
 class PerguntaRequest(BaseModel):
     pergunta: str
+    session_id: str = "default" # Identificador da sessão
     max_tokens: int = 512
     temperature: float = 0.7
 
@@ -132,7 +136,7 @@ class RespostaResponse(BaseModel):
 @app.post("/api/responder", response_model=RespostaResponse)
 async def responder(request: PerguntaRequest):
     """
-    Responde pergunta sobre saúde pública.
+    Responde pergunta sobre saúde pública com contexto.
     """
     start_time = time.time()
     
@@ -145,19 +149,36 @@ async def responder(request: PerguntaRequest):
         )
     
     try:
-        # Preparar prompt com instrução de sistema para Português
+        # Gerenciar histórico
+        if request.session_id not in conversations:
+            conversations[request.session_id] = []
+        
+        history = conversations[request.session_id]
+        
+        # Construir prompt com histórico (limitado aos últimos 3 turnos para caber no contexto)
+        context_str = ""
+        for q, a in history[-3:]:
+            context_str += f"Human: {q}\nAssistant: {a}\n"
+        
+        # Prompt refinado para evitar alucinações
         prompt = f"""<s>[INST] <<SYS>>
-Você é um assistente de saúde útil e preciso. Você deve responder sempre em Português do Brasil.
+Você é um assistente de saúde pública útil e direto. Responda apenas à pergunta feita.
+Não gere novas perguntas ou diálogos. Pare de gerar texto assim que terminar a resposta.
+Responda sempre em Português do Brasil.
 <</SYS>>
 
-{request.pergunta} [/INST]"""
+Contexto anterior:
+{context_str}
+
+Human: {request.pergunta} [/INST]"""
         
         # Tokenizar
         inputs = tokenizer(
             prompt,
             return_tensors="pt",
             padding=True,
-            truncation=True
+            truncation=True,
+            max_length=2048
         ).to(device)
         
         # Gerar resposta
@@ -165,23 +186,55 @@ Você é um assistente de saúde útil e preciso. Você deve responder sempre em
             output_ids = model.generate(
                 inputs.input_ids,
                 attention_mask=inputs.attention_mask,
-                max_new_tokens=128, # Reduzido para evitar divagações longas
-                temperature=0.4,    # Reduzido para ser mais focado
+                max_new_tokens=512,
+                temperature=0.6, # Levemente reduzido para ser mais focado
                 top_p=0.9,
                 do_sample=True,
                 pad_token_id=tokenizer.eos_token_id,
-                repetition_penalty=1.2,
-                no_repeat_ngram_size=3
+                repetition_penalty=1.2 # Aumentado para evitar repetições
             )
         
-        # Detokenizar
-        resposta_completa = tokenizer.decode(
-            output_ids[0],
+        # Detokenizar apenas os novos tokens
+        new_tokens = output_ids[0][inputs.input_ids.shape[1]:]
+        resposta = tokenizer.decode(
+            new_tokens,
             skip_special_tokens=True
-        )
+        ).strip()
         
-        # Extrair apenas a resposta (sem prompt)
-        resposta = resposta_completa.replace(prompt, "").strip()
+        logger.info(f"📝 Resposta RAW: {resposta}")
+
+        # Pós-processamento inteligente para recuperar a resposta real
+        
+        # 1. Se o modelo gerou o papel do assistente (ex: "Assistir:", "Assistant:"), pegamos o que vem depois
+        start_markers = ["Assistant:", "Assistir:", "AI:"]
+        for marker in start_markers:
+            if marker in resposta:
+                # Pega tudo depois do marcador
+                resposta = resposta.split(marker, 1)[1].strip()
+                break 
+
+        # 2. Se a resposta ainda começa com "Human:" ou "User:", tentamos pular essa linha
+        # Isso acontece se o modelo repetir a pergunta do usuário antes de responder
+        if resposta.startswith("Human:") or resposta.startswith("User:"):
+            parts = resposta.split("\n", 1)
+            if len(parts) > 1:
+                resposta = parts[1].strip()
+            else:
+                # Se só tem a pergunta, removemos o marcador para não ficar vazio, 
+                # mas provavelmente a resposta será ruim.
+                resposta = resposta.replace("Human:", "").replace("User:", "").strip()
+
+        # 3. Agora cortamos o que vier DEPOIS (alucinações de turnos futuros)
+        stop_markers = ["Human:", "[/INST]", "User:", "<s>", "</s>"]
+        for marker in stop_markers:
+            if marker in resposta:
+                resposta = resposta.split(marker)[0].strip()
+        
+        logger.info(f"✂️ Resposta Final: {resposta}")
+
+        # Atualizar histórico (apenas se não for vazio)
+        if resposta:
+            history.append((request.pergunta, resposta))
         
         tempo_processamento = time.time() - start_time
         

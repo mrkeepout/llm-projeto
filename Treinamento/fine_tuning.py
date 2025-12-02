@@ -1,6 +1,7 @@
 import torch
 import json
 import os
+import random
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
@@ -101,7 +102,7 @@ class LLMTrainerSaudePública:
         
         return self.model
     
-    def preparar_dados(self, dataset_path: str):
+    def preparar_dados(self, dataset_path: str, limit: int = None):
         """
         Prepara dados para treinamento.
         Complexidade: O(n × m) onde n = exemplos, m = comprimento médio
@@ -119,6 +120,14 @@ class LLMTrainerSaudePública:
             prompts = [d['prompt'] for d in dados]
         else:
             prompts = [d['prompt'] for d in dados['training_data']]
+            
+        # Aplicar limite se solicitado
+        if limit:
+            print(f"⚠️ Limitando dados a {limit} exemplos para teste rápido.")
+            random.shuffle(prompts)
+            prompts = prompts[:limit]
+        
+        print(f"📊 Carregados {len(prompts)} exemplos para treinamento.")
         
         # Tokenizar
         def tokenize(texto):
@@ -202,8 +211,11 @@ if __name__ == "__main__":
     # Aplicar LoRA
     trainer.aplicar_lora()
     
-    # Preparar dados
-    train_data, eval_data = trainer.preparar_dados("../Dataset/dataset_processed.json")
+    # Preparar dados (usando o novo dataset MedQuad)
+    # Adicione limit=100 para teste rápido, ou remova para treinar com tudo
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    dataset_path = os.path.join(base_dir, "../Dataset/dataset_medquad.json")
+    train_data, eval_data = trainer.preparar_dados(dataset_path, limit=5000)
     
     # Treinar
     trainer.treinar(train_data, eval_data)
