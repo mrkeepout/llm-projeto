@@ -171,9 +171,12 @@ class LLMTrainerSaudePública:
             weight_decay=0.01,
             logging_dir='./logs',
             logging_steps=1,
-            eval_strategy="no", # Disable eval for speed in demo
-            save_strategy="no",
-            load_best_model_at_end=False,
+            eval_strategy="steps", # Enable evaluation
+            eval_steps=50,         # Evaluate every 50 steps
+            save_strategy="steps", # Save checkpoint every 50 steps
+            save_steps=50,
+            load_best_model_at_end=True, # Load the best model at the end
+            metric_for_best_model="eval_loss",
             learning_rate=2e-4,
             use_cpu=not torch.cuda.is_available()
         )

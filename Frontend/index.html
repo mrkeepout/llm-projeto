@@ -14,7 +14,7 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #87bba3 0%, #0685cf 100%);
             min-height: 100vh;
             display: flex;
             justify-content: center;
@@ -35,7 +35,7 @@
         }
 
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(180deg, #4f8d7d 0%, #205a55 100%);
             color: white;
             padding: 30px;
             text-align: center;
@@ -168,7 +168,7 @@
 
         button {
             padding: 12px 30px;
-            background: #667eea;
+            background: #4a6af8;
             color: white;
             border: none;
             border-radius: 8px;
@@ -178,7 +178,7 @@
         }
 
         button:hover {
-            background: #764ba2;
+            background: #7583fa;
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(118, 75, 162, 0.3);
         }
@@ -195,7 +195,24 @@
             margin-top: 5px;
             text-align: right;
         }
+
+        .sources {
+            font-size: 0.8em;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(0,0,0,0.1);
+            color: #666;
+        }
+        .source-item {
+            display: inline-block;
+            background: rgba(0,0,0,0.05);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 
 <body>
@@ -237,7 +254,13 @@
 
             const content = document.createElement("div");
             content.className = "message-content";
-            content.textContent = texto;
+            
+            // Renderizar Markdown se for bot
+            if (tipo === 'bot') {
+                content.innerHTML = marked.parse(texto);
+            } else {
+                content.textContent = texto;
+            }
 
             msgDiv.appendChild(content);
 
@@ -302,7 +325,17 @@
 
                 // Adicionar resposta do bot
                 const tempoMs = Math.round(data.tempo_processamento * 1000);
-                adicionarMensagem(data.resposta, "bot", tempoMs);
+                let respostaFinal = data.resposta;
+                
+                // Adicionar fontes se existirem
+                if (data.sources && data.sources.length > 0) {
+                    const uniqueSources = [...new Set(data.sources)];
+                    respostaFinal += "\n\n<div class='sources'><strong>📚 Fontes:</strong><br>" + 
+                        uniqueSources.map(s => `<span class='source-item'>${s}</span>`).join("") + 
+                        "</div>";
+                }
+
+                adicionarMensagem(respostaFinal, "bot", tempoMs);
 
             } catch (error) {
                 console.error(error);
